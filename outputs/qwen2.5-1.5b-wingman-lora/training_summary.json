@@ -1,0 +1,32 @@
+{
+  "config": {
+    "model_path": "models/Qwen2.5-1.5B",
+    "train_path": "train.jsonl",
+    "valid_path": "valid.jsonl",
+    "output_dir": "outputs/qwen2.5-1.5b-wingman-lora",
+    "backend": "mlx",
+    "batch_size": 4,
+    "gradient_accumulation_steps": 4,
+    "learning_rate": 0.0001,
+    "num_epochs": 3,
+    "max_seq_length": 1024,
+    "lora_rank": 8,
+    "lora_alpha": 16.0,
+    "lora_dropout": 0.05,
+    "lora_layers": 16,
+    "eval_steps": 25,
+    "save_steps": 50,
+    "seed": 42,
+    "system_prompt": "You are a witty, chronically online Gen Z wingman and roast AI model. Deliver sharp, deadpan feedback and elite banter with zero corporate filler.",
+    "extra_metadata": {}
+  },
+  "metrics": {
+    "status": "completed",
+    "backend": "mlx",
+    "duration_seconds": 911.97,
+    "adapter_path": "outputs/qwen2.5-1.5b-wingman-lora/adapters",
+    "timestamp": "2026-08-20 22:09:02"
+  },
+  "train_rows": 2761,
+  "valid_rows": 345
+}
