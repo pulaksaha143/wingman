@@ -1,303 +1,197 @@
-import json
 import os
 import re
 import sys
 from pathlib import Path
-import streamlit as st
-import streamlit.components.v1 as components
+import gradio as gr
 
 sys.path.insert(0, str(Path(__file__).parent.resolve()))
 
-st.set_page_config(
-    page_title="Wingman",
-    layout="centered",
-    initial_sidebar_state="collapsed"
-)
-
 CUSTOM_CSS = """
-<style>
-    :root {
-        --primary: #0e5f6e;
-        --primary-hover: #0b4955;
-        --bg-main: #f7f9fa;
-        --text-main: #1a2a32;
-        --text-muted: #8b9ea8;
-        --border-light: #e5eaed;
-    }
+/* ── Global dark base ── */
+body, gradio-app {
+    background: #121212 !important;
+    color: #e0e0e0 !important;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+}
 
-    * {
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
-    }
+.gradio-container {
+    max-width: 800px !important;
+    margin: 0 auto !important;
+    padding: 20px 16px !important;
+}
 
-    section[data-testid="stSidebar"] {
-        display: none !important;
-    }
+/* Hide Gradio footer */
+footer { display: none !important; }
 
-    .stApp {
-        background-color: var(--bg-main) !important;
-        color: var(--text-main) !important;
-    }
+/* ── Header ── */
+.header {
+    text-align: center;
+    margin-bottom: 24px;
+}
+.header h1 {
+    font-size: 28px;
+    font-weight: 700;
+    color: #e0e0e0;
+    margin: 0;
+}
+.header p {
+    font-size: 16px;
+    color: #8a8a8a;
+    margin: 4px 0 0;
+}
 
-    header[data-testid="stHeader"] {
-        background-color: transparent !important;
-    }
+/* ── Chatbot ── */
+#wingman-chatbot {
+    background: #1a1a1a !important;
+    border-radius: 12px !important;
+    padding: 16px !important;
+    border: 1px solid #2a2a2a !important;
+    margin-bottom: 16px !important;
+}
+#wingman-chatbot .message {
+    margin: 8px 0 !important;
+    padding: 12px 16px !important;
+    border-radius: 12px !important;
+    width: fit-content !important;
+    max-width: 85% !important;
+    word-break: break-word !important;
+    white-space: pre-wrap !important;
+}
+#wingman-chatbot .message.user,
+#wingman-chatbot [data-testid="user"] {
+    background: #0a6b7c !important;
+    color: #ffffff !important;
+    align-self: flex-end !important;
+    margin-left: auto !important;
+    border-bottom-right-radius: 4px !important;
+    width: fit-content !important;
+}
+#wingman-chatbot .message.bot,
+#wingman-chatbot [data-testid="bot"] {
+    background: #2a2a2a !important;
+    color: #e0e0e0 !important;
+    border: 1px solid #3a3a3a !important;
+    align-self: flex-start !important;
+    margin-right: auto !important;
+    border-bottom-left-radius: 4px !important;
+    width: fit-content !important;
+}
+#wingman-chatbot .avatar-container {
+    display: none !important;
+}
 
-    .main .block-container {
-        max-width: 760px !important;
-        padding-top: 20px !important;
-        padding-bottom: 120px !important; 
-    }
+/* ── Input row ── */
+#input-row {
+    display: flex !important;
+    gap: 12px !important;
+    align-items: flex-end !important;
+    background: transparent !important;
+}
 
-    /* Hide the communication text input entirely */
-    div[data-testid="stTextInput"] {
-        display: none !important;
-        visibility: hidden !important;
-        height: 0 !important;
-        width: 0 !important;
-        position: absolute !important;
-    }
+/* Textbox – dark, pill‑shaped, auto‑expand */
+#wingman-input textarea {
+    background: #1e1e1e !important;
+    color: #e0e0e0 !important;
+    border: 2px solid #0a6b7c !important;
+    border-radius: 24px !important;
+    padding: 14px 18px !important;
+    font-size: 15px !important;
+    line-height: 1.5 !important;
+    min-height: 80px !important;
+    height: auto !important;
+    resize: none !important;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3) !important;
+}
+#wingman-input textarea:focus {
+    border-color: #0e8b9e !important;
+    outline: none !important;
+}
+#wingman-input textarea::placeholder {
+    color: #8a8a8a !important;
+}
 
-    /* Header styling */
-    .brand-group {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        margin-bottom: 24px;
-    }
+/* Buttons – pill‑shaped, dark */
+.action-btn {
+    background: #2a2a2a !important;
+    color: #e0e0e0 !important;
+    border: 1px solid #3a3a3a !important;
+    border-radius: 24px !important;
+    padding: 12px 20px !important;
+    font-weight: 600 !important;
+    font-size: 14px !important;
+    cursor: pointer !important;
+    transition: all 0.2s !important;
+    min-height: 48px !important;
+    white-space: nowrap !important;
+}
+.action-btn:hover {
+    background: #3a3a3a !important;
+    border-color: #4a4a4a !important;
+}
+#send-btn {
+    background: #0a6b7c !important;
+    color: #ffffff !important;
+    border: none !important;
+    border-radius: 24px !important;
+    padding: 12px 24px !important;
+    font-weight: 700 !important;
+    font-size: 15px !important;
+    box-shadow: 0 4px 12px rgba(10, 107, 124, 0.4) !important;
+    min-height: 48px !important;
+}
+#send-btn:hover {
+    background: #0e8b9e !important;
+    box-shadow: 0 6px 16px rgba(10, 107, 124, 0.6) !important;
+}
+#clear-btn {
+    background: transparent !important;
+    border: 1px solid #3a3a3a !important;
+    color: #b0b0b0 !important;
+}
+#clear-btn:hover {
+    background: #2a2a2a !important;
+    color: #ffffff !important;
+}
 
-    .brand-name {
-        font-size: 22px;
-        font-weight: 700;
-        color: var(--primary);
-        margin: 0;
-    }
-
-    .version-badge {
-        background: #eef4f6;
-        color: var(--primary);
-        font-size: 11px;
-        font-weight: 700;
-        padding: 2px 8px;
-        border-radius: 4px;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-    }
-
-    /* Chat Messages */
-    .msg-row-user {
-        display: flex;
-        justify-content: flex-end;
-        margin-bottom: 16px;
-        animation: fadeIn 0.25s ease forwards;
-    }
-
-    .msg-bubble-user {
-        background-color: var(--primary);
-        color: #ffffff;
-        padding: 12px 18px;
-        border-radius: 18px 18px 4px 18px;
-        max-width: 75%;
-        font-size: 15px;
-        line-height: 1.5;
-        word-wrap: break-word;
-    }
-
-    .msg-row-bot {
-        display: flex;
-        justify-content: flex-start;
-        margin-bottom: 16px;
-        animation: fadeIn 0.25s ease forwards;
-    }
-
-    .msg-body-bot {
-        background-color: #ffffff;
-        color: var(--text-main);
-        padding: 12px 18px;
-        border-radius: 18px 18px 18px 4px;
-        max-width: 75%;
-        font-size: 15px;
-        line-height: 1.5;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-        border: 1px solid var(--border-light);
-    }
-
-    /* Bot Special Formats */
-    .aura-score-badge {
-        display: inline-block;
-        font-size: 11px;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-        padding: 2px 6px;
-        border-radius: 4px;
-        margin-bottom: 6px;
-    }
-    .aura-score-pos { background: #eef4f6; color: var(--primary); }
-    .aura-score-neg { background: #FDE8E7; color: #B52A25; }
-
-    .verdict-text { font-weight: 700; color: var(--primary); margin-bottom: 6px; }
-    .roast-text { color: var(--text-main); font-size: 15px; line-height: 1.6; }
-
-    .diagnosis-text {
-        color: var(--primary);
-        font-weight: 700;
-        font-size: 12px;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-        margin-bottom: 6px;
-    }
-
-    .option-item {
-        margin-top: 8px;
-        padding: 10px 14px;
-        background-color: #f7f9fa;
-        border: 1px solid var(--border-light);
-        border-left: 3px solid var(--primary);
-        border-radius: 0 10px 10px 0;
-        font-size: 14px;
-    }
-
-    .option-item strong {
-        color: var(--primary);
-        display: block;
-        font-size: 12px;
-        text-transform: uppercase;
-        margin-bottom: 3px;
-    }
-
-    /* Loading state */
-    .loading-container { display: flex; justify-content: flex-start; margin-bottom: 24px; }
-    .loading-text {
-        font-size: 14px; font-weight: 600; color: var(--primary);
-        display: flex; align-items: center; gap: 8px; animation: pulse 1.5s infinite;
-        padding: 8px 14px; background: #ffffff; border: 1px solid var(--border-light);
-        border-radius: 18px 18px 18px 4px; box-shadow: 0 2px 8px rgba(0,0,0,0.02);
-    }
-    .loading-text svg { animation: spin 2s linear infinite; }
-
-    @keyframes pulse { 0% { opacity: 0.7; } 50% { opacity: 1; } 100% { opacity: 0.7; } }
-    @keyframes spin { 100% { transform: rotate(360deg); } }
-    @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
-
-    /* Input container animation */
-    div[data-testid="stBottom"] > div,
-    div[data-testid="stChatInputContainer"] {
-        background-color: transparent !important;
-        background: transparent !important;
-    }
-
-    div[data-testid="stBottom"] {
-        position: fixed !important;
-        top: 50% !important;
-        bottom: auto !important;
-        transform: translate(-50%, -50%) !important;
-        left: 50% !important;
-        width: 90% !important;
-        max-width: 760px !important;
-        transition: top 0.45s cubic-bezier(0.16, 1, 0.3, 1), transform 0.45s cubic-bezier(0.16, 1, 0.3, 1) !important;
-        z-index: 999 !important;
-        background-color: transparent !important;
-        background: transparent !important;
-    }
-
-    body.chat-active div[data-testid="stBottom"] {
-        top: calc(100% - 24px) !important;
-        transform: translate(-50%, -100%) !important;
-    }
-
-    /* FIXED Input Pill Styling */
-    div[data-testid="stChatInput"] {
-        background-color: #ffffff !important;
-        border: 2px solid var(--primary) !important;
-        border-radius: 34px !important;
-        padding: 4px 6px 4px 20px !important;
-        box-shadow: 0 6px 24px rgba(14, 95, 110, 0.08) !important;
-    }
-    
-    div[data-testid="stChatInput"]:focus-within {
-        box-shadow: 0 6px 24px rgba(14, 95, 110, 0.15) !important;
-    }
-
-    div[data-testid="stChatInput"] > div {
-        background: transparent !important;
-        border: none !important;
-        box-shadow: none !important;
-        padding: 0 !important;
-        align-items: center !important; 
-    }
-
-    div[data-testid="stChatInput"] textarea {
-        background-color: transparent !important;
-        color: var(--text-main) !important;
-        font-size: 15px !important;
-        caret-color: var(--primary) !important;
-        padding-top: 12px !important;
-        padding-bottom: 12px !important;
-        min-height: 24px !important;
-        line-height: 1.4 !important;
-    }
-
-    div[data-testid="stChatInput"] textarea::placeholder { 
-        color: var(--text-muted) !important;
-        opacity: 1 !important;
-    }
-
-    /* Circular Send Button */
-    div[data-testid="stChatInput"] button {
-        background-color: var(--primary) !important;
-        border: none !important;
-        border-radius: 50% !important;
-        width: 38px !important;
-        height: 38px !important;
-        min-width: 38px !important;
-        min-height: 38px !important;
-        display: flex !important;
-        align-items: center !important;
-        justify-content: center !important;
-        transition: background-color 0.2s, transform 0.1s !important;
-        align-self: center !important;
-        margin: 0 !important;
-        padding: 0 !important;
-        position: relative !important;
-        z-index: 11 !important;
-    }
-
-    div[data-testid="stChatInput"] button:hover {
-        background-color: var(--primary-hover) !important;
-    }
-
-    div[data-testid="stChatInput"] button:active {
-        transform: scale(0.94) !important;
-    }
-
-    div[data-testid="stChatInput"] button svg {
-        fill: none !important;
-        stroke: #ffffff !important;
-        stroke-width: 2.5 !important;
-        width: 16px !important;
-        height: 16px !important;
-    }
-</style>
+/* ── Custom output styles ── */
+.aura-score-badge {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 3px 8px;
+    border-radius: 12px;
+    margin-bottom: 8px;
+}
+.aura-score-pos { background-color: #1e4a3b; color: #8fe0c0; border: 1px solid #2a6b55; }
+.aura-score-neg { background-color: #4a2a2a; color: #f0a0a0; border: 1px solid #6b3a3a; }
+.verdict-text { font-weight: 700; color: #8fe0c0; margin-bottom: 6px; }
+.roast-text { color: #e0e0e0; font-size: 15px; line-height: 1.6; }
+.diagnosis-text {
+    color: #f0a0a0; font-weight: 700; font-size: 13px;
+    text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;
+}
+.option-item {
+    margin-top: 8px; padding: 10px 14px; background-color: #1e1e1e;
+    border: 1px solid #3a3a3a; border-left: 3px solid #0a6b7c;
+    border-radius: 0 10px 10px 0; font-size: 14px; line-height: 1.5;
+}
+.option-item strong {
+    color: #8fe0c0; display: block; font-size: 12px;
+    text-transform: uppercase; margin-bottom: 3px;
+}
 """
-st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
 
-
-@st.cache_resource
 def get_model(model_path: str, adapter_path: str | None, gguf_path: str):
-    try:
-        import mlx.core as mx
-        import mlx_lm
-        mx.set_default_device(mx.gpu)
-        USE_MLX = True
-    except ImportError:
-        USE_MLX = False
+    # Force GGUF backend to perfectly simulate Hugging Face Spaces
+    USE_MLX = False
 
     if USE_MLX:
         if adapter_path and os.path.exists(adapter_path):
             model, tokenizer = mlx_lm.load(model_path, adapter_path=adapter_path)
         else:
             model, tokenizer = mlx_lm.load(model_path)
-        
         try:
             im_end_id = tokenizer.encode("<|im_end|>")[0]
             if hasattr(tokenizer, "eos_token_ids"):
@@ -309,41 +203,30 @@ def get_model(model_path: str, adapter_path: str | None, gguf_path: str):
         from llama_cpp import Llama
         if not os.path.exists(gguf_path):
             raise FileNotFoundError(f"GGUF model not found at {gguf_path}.")
-        
-        llm = Llama(
-            model_path=gguf_path,
-            n_ctx=2048,
-            verbose=False
-        )
+        llm = Llama(model_path=gguf_path, n_ctx=2048, verbose=False)
         return {"type": "llama", "model": llm, "tokenizer": None}
 
 def clean_response(text: str) -> str:
     if "<|im_end|>" in text:
         text = text.split("<|im_end|>")[0]
-
     lines = text.strip().split("\n")
     cleaned_lines = []
-
     for line in lines:
         stripped = line.strip()
         if not stripped:
             continue
         if stripped.startswith("!") or stripped.startswith("[") or "!" in stripped[:5]:
             break
-
         stripped = re.sub(r"[^\x00-\x7F]+", "", stripped).strip()
         if not stripped:
             continue
-
         cleaned_lines.append(stripped)
-
         if stripped.startswith("Roast:") and ("Rating:" in "\n".join(cleaned_lines) or "Aura:" in "\n".join(cleaned_lines) or "Verdict:" in "\n".join(cleaned_lines)):
             break
         if (stripped.startswith("Option 2") or "Option 2 (" in stripped) and "Diagnosis:" in "\n".join(cleaned_lines):
             break
         if (stripped.startswith("Option 3") or "Option 3 (" in stripped) and "Option 1" in "\n".join(cleaned_lines):
             break
-
     return "\n".join(cleaned_lines).strip()
 
 def generate_chat_response(model_bundle, prompt_str: str, max_tokens: int, temp: float) -> str:
@@ -353,31 +236,26 @@ def generate_chat_response(model_bundle, prompt_str: str, max_tokens: int, temp:
         import mlx.core as mx
         import mlx_lm
         from mlx_lm.sample_utils import make_sampler
-        mx.set_default_device(mx.gpu)
         
         model = model_bundle["model"]
         tokenizer = model_bundle["tokenizer"]
         formatted_prompt = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
         sampler = make_sampler(temp=temp)
-
-        raw_response = mlx_lm.generate(
-            model,
-            tokenizer,
-            prompt=formatted_prompt,
-            max_tokens=max_tokens,
-            sampler=sampler,
-            verbose=False
-        )
+        
+        gpu_stream = mx.default_stream(mx.gpu)
+        with mx.stream(gpu_stream):
+            raw_response = mlx_lm.generate(
+                model, tokenizer, prompt=formatted_prompt,
+                max_tokens=max_tokens, sampler=sampler, verbose=False
+            )
     else:
         llm = model_bundle["model"]
         response = llm.create_chat_completion(
-            messages=messages,
-            max_tokens=max_tokens,
-            temperature=temp,
-            stream=False
+            messages=messages, max_tokens=max_tokens, temperature=temp, stream=False,
+            stop=["<|im_end|>", "<|endoftext|>"], repeat_penalty=1.15
         )
         raw_response = response['choices'][0]['message']['content']
-        
+    
     return clean_response(raw_response)
 
 model_path = "models/Qwen2.5-1.5B"
@@ -390,41 +268,71 @@ active_adapter = (
 temperature = 0.7
 max_tokens = 256
 
+try:
+    global_model_bundle = get_model(model_path, active_adapter, gguf_path)
+except Exception as e:
+    global_model_bundle = None
+    print(f"Failed to load model: {e}")
 
-if "messages" not in st.session_state:
-    st.session_state["messages"] = []
 
-nav_l, nav_r = st.columns([4, 1])
-with nav_l:
-    st.markdown('<div class="brand-group"><h1 class="brand-name">Wingman</h1><span class="version-badge">v2.0</span></div>', unsafe_allow_html=True)
-with nav_r:
-    if st.button("New Chat", use_container_width=True):
-        st.session_state["messages"] = []
-        st.rerun()
+def format_response(text: str) -> str:
+    if "Rating:" in text or "Aura:" in text or "Verdict:" in text:
+        score_val = "0/10"
+        score_label = "RATING"
+        verdict_val = ""
+        roast_val = text
+        for line in text.split("\n"):
+            if line.startswith("Aura:"):
+                score_val = line.replace("Aura:", "").strip()
+                score_label = "AURA"
+            elif line.startswith("Rating:"):
+                score_val = line.replace("Rating:", "").strip()
+                score_label = "RATING"
+            elif line.startswith("Verdict:"):
+                verdict_val = line.replace("Verdict:", "").strip()
+            elif line.startswith("Roast:"):
+                roast_val = line.replace("Roast:", "").strip()
+        is_pos = False
+        if score_label == "AURA":
+            is_pos = "+" in score_val or ("-" not in score_val and score_val != "0")
+        else:
+            try:
+                rating_num = float(score_val.split("/")[0])
+                is_pos = rating_num >= 6.0
+            except:
+                is_pos = False
+        badge_class = "aura-score-pos" if is_pos else "aura-score-neg"
+        verdict_span = f'<span class="verdict-text" style="margin-left: 8px;">{verdict_val}</span>' if verdict_val else ''
+        return f'<div><span class="aura-score-badge {badge_class}">{score_label}: {score_val}</span>{verdict_span}</div><div class="roast-text">{roast_val}</div>'
 
-# Class toggle for the center-to-bottom animation
-components.html(f"""
-<script>
-(function() {{
-    const hasMessages = {str(bool(st.session_state['messages'])).lower()};
-    if (hasMessages) {{
-        window.parent.document.body.classList.add('chat-active');
-    }} else {{
-        window.parent.document.body.classList.remove('chat-active');
-    }}
-}})();
-</script>
-""", height=0)
+    elif "Diagnosis:" in text or "Option 1" in text:
+        diag_val = ""
+        options = []
+        curr_opt_idx = -1
+        for line in text.split("\n"):
+            if line.startswith("Diagnosis:"):
+                diag_val = line.replace("Diagnosis:", "").strip()
+                curr_opt_idx = -1
+            elif line.startswith("Option"):
+                parts = line.split(":", 1)
+                t = parts[0].strip()
+                b = parts[1].strip() if len(parts) > 1 else ""
+                options.append([t, b])
+                curr_opt_idx = len(options) - 1
+            elif curr_opt_idx != -1 and line.strip():
+                options[curr_opt_idx][1] += " " + line.strip()
+        if not diag_val and not options:
+            return text
+        else:
+            diag_html = f'<div class="diagnosis-text">DIAGNOSIS: {diag_val}</div>' if diag_val else ''
+            opts_html = "".join([f'<div class="option-item"><strong>{t}</strong> {b}</div>' for t, b in options])
+            return f'{diag_html}{opts_html}'
+    else:
+        return text
 
-user_input = st.chat_input("Use /judge, /refine, or /gen followed by your text...")
-
-if user_input:
-    input_text = user_input.strip()
+def respond(user_message, chat_history):
+    input_text = user_message.strip()
     lower_input = input_text.lower()
-    
-    # Save user message to history instantly
-    st.session_state["messages"].append({"role": "user", "content": input_text})
-
     curr_mode = None
     target_to_process = None
 
@@ -441,138 +349,82 @@ if user_input:
         curr_mode = "GENERATE"
         target_to_process = input_text[10:].strip()
 
-    if target_to_process:
-        # Flag that we need to generate a response (handled after rendering UI)
-        st.session_state["pending_target"] = target_to_process
-        st.session_state["pending_mode"] = curr_mode
-    else:
-        # Invalid format - instantly append guide and rerun
+    if not target_to_process:
         guide_message = (
             "**Oops! Please use a command to tell Wingman what to do.**\n\n"
             "• `/judge [text]` — Rate a pickup line or message\n"
             "• `/refine [text]` — Polish your draft\n"
             "• `/gen [scenario]` — Generate openers or ideas"
         )
-        st.session_state["messages"].append({"role": "assistant", "content": guide_message})
-        st.rerun()
+        chat_history.append({"role": "user", "content": user_message})
+        chat_history.append({"role": "assistant", "content": guide_message})
+        return "", chat_history
 
-
-for msg in st.session_state["messages"]:
-    if msg["role"] == "user":
-        st.markdown(f'<div class="msg-row-user"><div class="msg-bubble-user">{msg["content"]}</div></div>', unsafe_allow_html=True)
+    if curr_mode == "JUDGE":
+        full_prompt = f"[JUDGE] Line: '{target_to_process}'"
+    elif curr_mode == "REFINE":
+        full_prompt = f"[REFINE] Line: '{target_to_process}'"
     else:
-        text = msg["content"]
-
-        if "Rating:" in text or "Aura:" in text or "Verdict:" in text:
-            score_val = "0/10"
-            score_label = "RATING"
-            verdict_val = ""
-            roast_val = text
-
-            for line in text.split("\n"):
-                if line.startswith("Aura:"):
-                    score_val = line.replace("Aura:", "").strip()
-                    score_label = "AURA"
-                elif line.startswith("Rating:"):
-                    score_val = line.replace("Rating:", "").strip()
-                    score_label = "RATING"
-                elif line.startswith("Verdict:"):
-                    verdict_val = line.replace("Verdict:", "").strip()
-                elif line.startswith("Roast:"):
-                    roast_val = line.replace("Roast:", "").strip()
-
-            is_pos = False
-            if score_label == "AURA":
-                is_pos = "+" in score_val or ("-" not in score_val and score_val != "0")
-            else:
-                try:
-                    rating_num = float(score_val.split("/")[0])
-                    is_pos = rating_num >= 6.0
-                except:
-                    is_pos = False
-                
-            badge_class = "aura-score-pos" if is_pos else "aura-score-neg"
-            verdict_span = f'<span class="verdict-text" style="margin-left: 8px;">{verdict_val}</span>' if verdict_val else ''
-            
-            bot_html = f'<div class="msg-row-bot"><div class="msg-body-bot"><div><span class="aura-score-badge {badge_class}">{score_label}: {score_val}</span>{verdict_span}</div><div class="roast-text">{roast_val}</div></div></div>'
-            st.markdown(bot_html, unsafe_allow_html=True)
-
-        elif "Diagnosis:" in text or "Option 1" in text:
-            diag_val = ""
-            options = []
-            curr_opt_idx = -1
-
-            for line in text.split("\n"):
-                if line.startswith("Diagnosis:"):
-                    diag_val = line.replace("Diagnosis:", "").strip()
-                    curr_opt_idx = -1
-                elif line.startswith("Option"):
-                    parts = line.split(":", 1)
-                    t = parts[0].strip()
-                    b = parts[1].strip() if len(parts) > 1 else ""
-                    options.append([t, b])
-                    curr_opt_idx = len(options) - 1
-                elif curr_opt_idx != -1 and line.strip():
-                    options[curr_opt_idx][1] += " " + line.strip()
-            
-            if not diag_val and not options:
-                bot_html = f'<div class="msg-row-bot"><div class="msg-body-bot" style="white-space: pre-wrap;">{text}</div></div>'
-            else:
-                diag_html = f'<div class="diagnosis-text">DIAGNOSIS: {diag_val}</div>' if diag_val else ''
-                opts_html = "".join([f'<div class="option-item"><strong>{t}</strong> {b}</div>' for t, b in options])
-                bot_html = f'<div class="msg-row-bot"><div class="msg-body-bot">{diag_html}{opts_html}</div></div>'
-            
-            st.markdown(bot_html, unsafe_allow_html=True)
-
+        if not target_to_process.lower().startswith("scenario:"):
+            full_prompt = f"[GENERATE] Scenario: {target_to_process}"
         else:
-            bot_html = f'<div class="msg-row-bot"><div class="msg-body-bot" style="white-space: pre-wrap;">{text}</div></div>'
-            st.markdown(bot_html, unsafe_allow_html=True)
-
-
-if "pending_target" in st.session_state:
-    curr_mode = st.session_state["pending_mode"]
-    loading_verbs = {"JUDGE": "Judging...", "REFINE": "Rizzing...", "GENERATE": "Cooking..."}
-    loading_text = loading_verbs.get(curr_mode, "Thinking...")
-
-    loading_html = f'''<div class="loading-container"><div class="loading-text"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="2" x2="12" y2="6"></line><line x1="12" y1="18" x2="12" y2="22"></line><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line><line x1="2" y1="12" x2="6" y2="12"></line><line x1="18" y1="12" x2="22" y2="12"></line><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"></line><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"></line></svg> {loading_text}</div></div>'''
-    st.markdown(loading_html, unsafe_allow_html=True)
-
-st.markdown('<div id="chat-end-anchor" style="height: 130px; width: 100%;"></div>', unsafe_allow_html=True)
-
-components.html("""
-<script>
-    // A slight delay guarantees the DOM is fully painted by Streamlit before scrolling
-    setTimeout(() => {
-        const doc = window.parent.document;
-        const anchor = doc.getElementById('chat-end-anchor');
-        if (anchor) {
-            anchor.scrollIntoView({behavior: 'smooth', block: 'end'});
-        }
-    }, 100);
-</script>
-""", height=0)
-
-if "pending_target" in st.session_state:
-    target_to_process = st.session_state.pop("pending_target")
-    curr_mode = st.session_state.pop("pending_mode")
-
-    if target_to_process.startswith("[JUDGE]") or target_to_process.startswith("[REFINE]") or target_to_process.startswith("[GENERATE]"):
-        full_prompt = target_to_process
-    else:
-        if curr_mode == "JUDGE":
-            full_prompt = f"[JUDGE] Line: '{target_to_process}'"
-        elif curr_mode == "REFINE":
-            full_prompt = f"[REFINE] Line: '{target_to_process}'"
-        else:
-            if not target_to_process.lower().startswith("scenario:"):
-                full_prompt = f"[GENERATE] Scenario: {target_to_process}"
-            else:
-                full_prompt = f"[GENERATE] {target_to_process}"
+            full_prompt = f"[GENERATE] {target_to_process}"
 
     try:
-        model_bundle = get_model(model_path, active_adapter, gguf_path)
-        reply = generate_chat_response(model_bundle, full_prompt, max_tokens, temperature)
-        st.session_state["messages"].append({"role": "assistant", "content": reply})
+        if global_model_bundle is None:
+            raise Exception("Model not loaded properly.")
+        reply = generate_chat_response(global_model_bundle, full_prompt, max_tokens, temperature)
+        formatted_reply = format_response(reply)
+        chat_history.append({"role": "user", "content": user_message})
+        chat_history.append({"role": "assistant", "content": formatted_reply})
     except Exception as e:
-        st.session_state["messages"].append({"role": "assistant", "content": f"Execution error: {str(e)}"})
-    st.rerun()
+        chat_history.append({"role": "user", "content": user_message})
+        chat_history.append({"role": "assistant", "content": f"Execution error: {str(e)}"})
+
+    return "", chat_history
+
+def clear_chat():
+    return []
+
+
+with gr.Blocks(title="Wingman") as demo:
+    # Header
+    gr.HTML("""
+        <div class="header">
+            <h1>Wingman</h1>
+        </div>
+    """)
+
+    # Chatbot
+    chatbot = gr.Chatbot(
+        elem_id="wingman-chatbot",
+        label=None,
+        height=450
+    )
+
+    # Input row: textbox + action buttons
+    with gr.Row(elem_id="input-row"):
+        msg = gr.Textbox(
+            placeholder="Use /judge, /refine, or /gen followed by your text...",
+            show_label=False,
+            container=False,
+            elem_id="wingman-input",
+            lines=2
+        )
+        with gr.Column(scale=0, min_width=120):
+            send_btn = gr.Button("Submit", elem_id="send-btn", variant="primary")
+            
+    with gr.Row():
+        clear_btn = gr.Button("Clear Chat", elem_id="clear-btn", variant="secondary")
+
+    # Wire up events
+    send_btn.click(respond, [msg, chatbot], [msg, chatbot])
+    msg.submit(respond, [msg, chatbot], [msg, chatbot])
+    clear_btn.click(clear_chat, [], [chatbot])
+
+if __name__ == "__main__":
+    demo.launch(
+        server_name="0.0.0.0",
+        server_port=7860,
+        css=CUSTOM_CSS
+    )
