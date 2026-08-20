@@ -48,8 +48,7 @@ CUSTOM_CSS = """
     .main .block-container {
         max-width: 760px !important;
         padding-top: 20px !important;
-        /* Increased heavily to prevent the input bar from overlapping the final message */
-        padding-bottom: 200px !important; 
+        padding-bottom: 120px !important; 
     }
 
     /* Hide the communication text input entirely */
@@ -329,7 +328,7 @@ def clean_response(text: str) -> str:
 
         cleaned_lines.append(stripped)
 
-        if stripped.startswith("Roast:") and ("Aura:" in "\n".join(cleaned_lines) or "Verdict:" in "\n".join(cleaned_lines)):
+        if stripped.startswith("Roast:") and ("Rating:" in "\n".join(cleaned_lines) or "Aura:" in "\n".join(cleaned_lines) or "Verdict:" in "\n".join(cleaned_lines)):
             break
         if (stripped.startswith("Option 2") or "Option 2 (" in stripped) and "Diagnosis:" in "\n".join(cleaned_lines):
             break
@@ -375,13 +374,13 @@ if "messages" not in st.session_state:
 
 nav_l, nav_r = st.columns([4, 1])
 with nav_l:
-    st.markdown('<div class="brand-group"><h1 class="brand-name">Wingman</h1></div>', unsafe_allow_html=True)
+    st.markdown('<div class="brand-group"><h1 class="brand-name">Wingman</h1><span class="version-badge">v2.0</span></div>', unsafe_allow_html=True)
 with nav_r:
     if st.button("New Chat", use_container_width=True):
         st.session_state["messages"] = []
         st.rerun()
 
-# Minimal JS strictly to toggle the centered/bottom position
+# Class toggle for the center-to-bottom animation
 components.html(f"""
 <script>
 (function() {{
@@ -395,32 +394,92 @@ components.html(f"""
 </script>
 """, height=0)
 
+
+# ---------------------------------------------------------
+# 4. HANDLE INPUT (Before Rendering History)
+# ---------------------------------------------------------
+user_input = st.chat_input("Use /judge, /refine, or /gen followed by your text...")
+
+if user_input:
+    input_text = user_input.strip()
+    lower_input = input_text.lower()
+    
+    # Save user message to history instantly
+    st.session_state["messages"].append({"role": "user", "content": input_text})
+
+    curr_mode = None
+    target_to_process = None
+
+    if lower_input.startswith("/judge "):
+        curr_mode = "JUDGE"
+        target_to_process = input_text[7:].strip()
+    elif lower_input.startswith("/refine "):
+        curr_mode = "REFINE"
+        target_to_process = input_text[8:].strip()
+    elif lower_input.startswith("/gen "):
+        curr_mode = "GENERATE"
+        target_to_process = input_text[5:].strip()
+    elif lower_input.startswith("/generate "):
+        curr_mode = "GENERATE"
+        target_to_process = input_text[10:].strip()
+
+    if target_to_process:
+        # Flag that we need to generate a response (handled after rendering UI)
+        st.session_state["pending_target"] = target_to_process
+        st.session_state["pending_mode"] = curr_mode
+    else:
+        # Invalid format - instantly append guide and rerun
+        guide_message = (
+            "**Oops! Please use a command to tell Wingman what to do.**\n\n"
+            "• `/judge [text]` — Rate a pickup line or message\n"
+            "• `/refine [text]` — Polish your draft\n"
+            "• `/gen [scenario]` — Generate openers or ideas"
+        )
+        st.session_state["messages"].append({"role": "assistant", "content": guide_message})
+        st.rerun()
+
+
+# ---------------------------------------------------------
+# 5. RENDER CHAT HISTORY
+# ---------------------------------------------------------
 for msg in st.session_state["messages"]:
     if msg["role"] == "user":
-        # Flat string to prevent Markdown parsing it as code
         st.markdown(f'<div class="msg-row-user"><div class="msg-bubble-user">{msg["content"]}</div></div>', unsafe_allow_html=True)
     else:
         text = msg["content"]
 
-        if "Aura:" in text or "Verdict:" in text:
-            aura_val = "0"
+        if "Rating:" in text or "Aura:" in text or "Verdict:" in text:
+            score_val = "0/10"
+            score_label = "RATING"
             verdict_val = ""
             roast_val = text
 
             for line in text.split("\n"):
                 if line.startswith("Aura:"):
-                    aura_val = line.replace("Aura:", "").strip()
+                    score_val = line.replace("Aura:", "").strip()
+                    score_label = "AURA"
+                elif line.startswith("Rating:"):
+                    score_val = line.replace("Rating:", "").strip()
+                    score_label = "RATING"
                 elif line.startswith("Verdict:"):
                     verdict_val = line.replace("Verdict:", "").strip()
                 elif line.startswith("Roast:"):
                     roast_val = line.replace("Roast:", "").strip()
 
-            is_pos = "+" in aura_val or ("-" not in aura_val and aura_val != "0")
+            is_pos = False
+            if score_label == "AURA":
+                is_pos = "+" in score_val or ("-" not in score_val and score_val != "0")
+            else:
+                try:
+                    rating_num = float(score_val.split("/")[0])
+                    is_pos = rating_num >= 6.0
+                except:
+                    is_pos = False
+                
             badge_class = "aura-score-pos" if is_pos else "aura-score-neg"
             verdict_span = f'<span class="verdict-text" style="margin-left: 8px;">{verdict_val}</span>' if verdict_val else ''
             
-            # Flat string
-            bot_html = f'<div class="msg-row-bot"><div class="msg-body-bot"><div><span class="aura-score-badge {badge_class}">AURA: {aura_val}</span>{verdict_span}</div><div class="roast-text">{roast_val}</div></div></div>'
+            bot_html = f'<div class="msg-row-bot"><div class="msg-body-bot"><div><span class="aura-score-badge {badge_class}">{score_label}: {score_val}</span>{verdict_span}</div><div class="roast-text">{roast_val}</div></div></div>'
             st.markdown(bot_html, unsafe_allow_html=True)
 
         elif "Diagnosis:" in text or "Option 1" in text:
@@ -446,7 +505,6 @@ for msg in st.session_state["messages"]:
             else:
                 diag_html = f'<div class="diagnosis-text">DIAGNOSIS: {diag_val}</div>' if diag_val else ''
                 opts_html = "".join([f'<div class="option-item"><strong>{t}</strong> {b}</div>' for t, b in options])
-                # Flat string
                 bot_html = f'<div class="msg-row-bot"><div class="msg-body-bot">{diag_html}{opts_html}</div></div>'
             
             st.markdown(bot_html, unsafe_allow_html=True)
@@ -456,77 +514,63 @@ for msg in st.session_state["messages"]:
             st.markdown(bot_html, unsafe_allow_html=True)
 
 # ---------------------------------------------------------
-# Spacer - Triggers Streamlit auto-scroll safely past the fixed input bar
+# 6. RENDER LOADING UI (If Pending)
 # ---------------------------------------------------------
-st.markdown('<div style="height: 100px; width: 100%;"></div>', unsafe_allow_html=True)
+if "pending_target" in st.session_state:
+    curr_mode = st.session_state["pending_mode"]
+    loading_verbs = {"JUDGE": "Judging...", "REFINE": "Rizzing...", "GENERATE": "Cooking..."}
+    loading_text = loading_verbs.get(curr_mode, "Thinking...")
+
+    loading_html = f'''<div class="loading-container"><div class="loading-text"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="2" x2="12" y2="6"></line><line x1="12" y1="18" x2="12" y2="22"></line><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line><line x1="2" y1="12" x2="6" y2="12"></line><line x1="18" y1="12" x2="22" y2="12"></line><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"></line><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"></line></svg> {loading_text}</div></div>'''
+    st.markdown(loading_html, unsafe_allow_html=True)
 
 # ---------------------------------------------------------
-# 4. INPUT & GENERATION
+# 7. BOTTOM ANCHOR SPACER & AUTO-SCROLL
 # ---------------------------------------------------------
-user_input = st.chat_input("Use /judge, /refine, or /gen followed by your text...")
+# This 130px spacer is mathematically guaranteed to push the last message entirely 
+# above the chat input box (which floats at the bottom)
+st.markdown('<div id="chat-end-anchor" style="height: 130px; width: 100%;"></div>', unsafe_allow_html=True)
 
-if user_input:
-    input_text = user_input.strip()
-    lower_input = input_text.lower()
-    
-    # Immediately display user message
-    st.session_state["messages"].append({"role": "user", "content": input_text})
-    st.markdown(f'<div class="msg-row-user"><div class="msg-bubble-user">{input_text}</div></div>', unsafe_allow_html=True)
+components.html("""
+<script>
+    // A slight delay guarantees the DOM is fully painted by Streamlit before scrolling
+    setTimeout(() => {
+        const doc = window.parent.document;
+        const anchor = doc.getElementById('chat-end-anchor');
+        if (anchor) {
+            anchor.scrollIntoView({behavior: 'smooth', block: 'end'});
+        }
+    }, 100);
+</script>
+""", height=0)
 
-    curr_mode = None
-    target_to_process = None
 
-    if lower_input.startswith("/judge "):
-        curr_mode = "JUDGE"
-        target_to_process = input_text[7:].strip()
-    elif lower_input.startswith("/refine "):
-        curr_mode = "REFINE"
-        target_to_process = input_text[8:].strip()
-    elif lower_input.startswith("/gen "):
-        curr_mode = "GENERATE"
-        target_to_process = input_text[5:].strip()
-    elif lower_input.startswith("/generate "):
-        curr_mode = "GENERATE"
-        target_to_process = input_text[10:].strip()
+# ---------------------------------------------------------
+# 8. EXECUTE GENERATION (If Pending)
+# ---------------------------------------------------------
+if "pending_target" in st.session_state:
+    target_to_process = st.session_state.pop("pending_target")
+    curr_mode = st.session_state.pop("pending_mode")
 
-    if target_to_process:
-        if target_to_process.startswith("[JUDGE]") or target_to_process.startswith("[REFINE]") or target_to_process.startswith("[GENERATE]"):
-            full_prompt = target_to_process
-        else:
-            if curr_mode == "JUDGE":
-                full_prompt = f"[JUDGE] Line: '{target_to_process}'"
-            elif curr_mode == "REFINE":
-                full_prompt = f"[REFINE] Line: '{target_to_process}'"
-            else:
-                if not target_to_process.lower().startswith("scenario:"):
-                    full_prompt = f"[GENERATE] Scenario: {target_to_process}"
-                else:
-                    full_prompt = f"[GENERATE] {target_to_process}"
-
-        loading_placeholder = st.empty()
-        loading_verbs = {"JUDGE": "Judging...", "REFINE": "Rizzing...", "GENERATE": "Cooking..."}
-        loading_text = loading_verbs.get(curr_mode, "Thinking...")
-
-        # Single string to prevent code block parsing
-        loading_html = f'''<div class="loading-container"><div class="loading-text"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="2" x2="12" y2="6"></line><line x1="12" y1="18" x2="12" y2="22"></line><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line><line x1="2" y1="12" x2="6" y2="12"></line><line x1="18" y1="12" x2="22" y2="12"></line><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"></line><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"></line></svg> {loading_text}</div></div>'''
-        loading_placeholder.markdown(loading_html, unsafe_allow_html=True)
-
-        try:
-            model, tokenizer = get_mlx_model(model_path, active_adapter)
-            reply = generate_chat_response(model, tokenizer, full_prompt, max_tokens, temperature)
-            st.session_state["messages"].append({"role": "assistant", "content": reply})
-        except Exception as e:
-            st.session_state["messages"].append({"role": "assistant", "content": f"Execution error: {str(e)}"})
-
-        loading_placeholder.empty()
-        st.rerun()
-
+    if target_to_process.startswith("[JUDGE]") or target_to_process.startswith("[REFINE]") or target_to_process.startswith("[GENERATE]"):
+        full_prompt = target_to_process
     else:
-        guide_message = (
-            "**Oops! Please use a command to tell Wingman what to do.**\n\n"
-            "• `/judge [text]` — Rate a pickup line or message\n"
-            "• `/refine [text]` — Polish your draft\n"
-            "• `/gen [scenario]` — Generate openers or ideas"
-        )
-        st.session_state["messages"].append({"role": "assistant", "content": guide_message})
-        st.rerun()
+        if curr_mode == "JUDGE":
+            full_prompt = f"[JUDGE] Line: '{target_to_process}'"
+        elif curr_mode == "REFINE":
+            full_prompt = f"[REFINE] Line: '{target_to_process}'"
+        else:
+            if not target_to_process.lower().startswith("scenario:"):
+                full_prompt = f"[GENERATE] Scenario: {target_to_process}"
+            else:
+                full_prompt = f"[GENERATE] {target_to_process}"
+
+    try:
+        model, tokenizer = get_mlx_model(model_path, active_adapter)
+        reply = generate_chat_response(model, tokenizer, full_prompt, max_tokens, temperature)
+        st.session_state["messages"].append({"role": "assistant", "content": reply})
+    except Exception as e:
+        st.session_state["messages"].append({"role": "assistant", "content": f"Execution error: {str(e)}"})
+
+    # Trigger a rerun so the new response renders properly (and scrolls into view)
+    st.rerun()

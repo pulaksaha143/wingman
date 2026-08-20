@@ -39,6 +39,15 @@ class MLXModelTrainer(ModelTrainer):
         self.logger.info(f"  Learning rate: {self.config.learning_rate}")
         self.logger.info(f"  Max sequence length: {self.config.max_seq_length}")
 
+        with open(self.config.train_path, "r", encoding="utf-8") as f:
+            train_rows = sum(1 for _ in f)
+            
+        samples_per_step = self.config.batch_size * self.config.gradient_accumulation_steps
+        steps_per_epoch = max(1, train_rows // samples_per_step)
+        total_iters = self.config.num_epochs * steps_per_epoch
+        
+        self.logger.info(f"Dynamic Iteration Calculation: {train_rows} rows / {samples_per_step} samples per step = {steps_per_epoch} steps/epoch. Total iters: {total_iters}")
+
         start_time = time.time()
         
         try:
@@ -52,7 +61,7 @@ class MLXModelTrainer(ModelTrainer):
                 "--num-layers", str(self.config.lora_layers),
                 "--grad-accumulation-steps", str(self.config.gradient_accumulation_steps),
                 "--learning-rate", str(self.config.learning_rate),
-                "--iters", str(self.config.num_epochs * 250),
+                "--iters", str(total_iters),
                 "--steps-per-report", str(self.config.eval_steps),
                 "--steps-per-eval", str(self.config.eval_steps),
                 "--save-every", str(self.config.save_steps),
