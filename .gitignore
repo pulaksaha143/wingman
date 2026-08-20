@@ -1,4 +1,6 @@
 .venv
 .idea
 scripts
-models
+models/
+outputs
+index.html
