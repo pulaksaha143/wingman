@@ -14,9 +14,6 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# ---------------------------------------------------------
-# 1. UI STYLES
-# ---------------------------------------------------------
 CUSTOM_CSS = """
 <style>
     :root {
@@ -285,28 +282,40 @@ CUSTOM_CSS = """
 st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
 
 
-# ---------------------------------------------------------
-# 2. BACKEND LOGIC 
-# ---------------------------------------------------------
 @st.cache_resource
-def get_mlx_model(model_path: str, adapter_path: str | None):
-    import mlx.core as mx
-    import mlx_lm
-    mx.set_default_device(mx.gpu)
-
-    if adapter_path and os.path.exists(adapter_path):
-        model, tokenizer = mlx_lm.load(model_path, adapter_path=adapter_path)
-    else:
-        model, tokenizer = mlx_lm.load(model_path)
-
+def get_model(model_path: str, adapter_path: str | None, gguf_path: str):
     try:
-        im_end_id = tokenizer.encode("<|im_end|>")[0]
-        if hasattr(tokenizer, "eos_token_ids"):
-            tokenizer.eos_token_ids.add(im_end_id)
-    except Exception:
-        pass
+        import mlx.core as mx
+        import mlx_lm
+        mx.set_default_device(mx.gpu)
+        USE_MLX = True
+    except ImportError:
+        USE_MLX = False
 
-    return model, tokenizer
+    if USE_MLX:
+        if adapter_path and os.path.exists(adapter_path):
+            model, tokenizer = mlx_lm.load(model_path, adapter_path=adapter_path)
+        else:
+            model, tokenizer = mlx_lm.load(model_path)
+        
+        try:
+            im_end_id = tokenizer.encode("<|im_end|>")[0]
+            if hasattr(tokenizer, "eos_token_ids"):
+                tokenizer.eos_token_ids.add(im_end_id)
+        except Exception:
+            pass
+        return {"type": "mlx", "model": model, "tokenizer": tokenizer}
+    else:
+        from llama_cpp import Llama
+        if not os.path.exists(gguf_path):
+            raise FileNotFoundError(f"GGUF model not found at {gguf_path}.")
+        
+        llm = Llama(
+            model_path=gguf_path,
+            n_ctx=2048,
+            verbose=False
+        )
+        return {"type": "llama", "model": llm, "tokenizer": None}
 
 def clean_response(text: str) -> str:
     if "<|im_end|>" in text:
@@ -337,26 +346,42 @@ def clean_response(text: str) -> str:
 
     return "\n".join(cleaned_lines).strip()
 
-def generate_chat_response(model, tokenizer, prompt_str: str, max_tokens: int, temp: float) -> str:
-    import mlx.core as mx
-    import mlx_lm
-    from mlx_lm.sample_utils import make_sampler
-    mx.set_default_device(mx.gpu)
+def generate_chat_response(model_bundle, prompt_str: str, max_tokens: int, temp: float) -> str:
     messages = [{"role": "user", "content": prompt_str.strip()}]
-    formatted_prompt = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
-    sampler = make_sampler(temp=temp)
+    
+    if model_bundle["type"] == "mlx":
+        import mlx.core as mx
+        import mlx_lm
+        from mlx_lm.sample_utils import make_sampler
+        mx.set_default_device(mx.gpu)
+        
+        model = model_bundle["model"]
+        tokenizer = model_bundle["tokenizer"]
+        formatted_prompt = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+        sampler = make_sampler(temp=temp)
 
-    raw_response = mlx_lm.generate(
-        model,
-        tokenizer,
-        prompt=formatted_prompt,
-        max_tokens=max_tokens,
-        sampler=sampler,
-        verbose=False
-    )
+        raw_response = mlx_lm.generate(
+            model,
+            tokenizer,
+            prompt=formatted_prompt,
+            max_tokens=max_tokens,
+            sampler=sampler,
+            verbose=False
+        )
+    else:
+        llm = model_bundle["model"]
+        response = llm.create_chat_completion(
+            messages=messages,
+            max_tokens=max_tokens,
+            temperature=temp,
+            stream=False
+        )
+        raw_response = response['choices'][0]['message']['content']
+        
     return clean_response(raw_response)
 
 model_path = "models/Qwen2.5-1.5B"
+gguf_path = "models/wingman.gguf"
 active_adapter = (
     "outputs/qwen2.5-1.5b-wingman-lora/adapters"
     if os.path.exists("outputs/qwen2.5-1.5b-wingman-lora/adapters")
@@ -366,9 +391,6 @@ temperature = 0.7
 max_tokens = 256
 
 
-# ---------------------------------------------------------
-# 3. STATE MANAGEMENT & LAYOUT
-# ---------------------------------------------------------
 if "messages" not in st.session_state:
     st.session_state["messages"] = []
 
@@ -394,10 +416,6 @@ components.html(f"""
 </script>
 """, height=0)
 
-
-# ---------------------------------------------------------
-# 4. HANDLE INPUT (Before Rendering History)
-# ---------------------------------------------------------
 user_input = st.chat_input("Use /judge, /refine, or /gen followed by your text...")
 
 if user_input:
@@ -439,9 +457,6 @@ if user_input:
         st.rerun()
 
 
-# ---------------------------------------------------------
-# 5. RENDER CHAT HISTORY
-# ---------------------------------------------------------
 for msg in st.session_state["messages"]:
     if msg["role"] == "user":
         st.markdown(f'<div class="msg-row-user"><div class="msg-bubble-user">{msg["content"]}</div></div>', unsafe_allow_html=True)
@@ -513,9 +528,7 @@ for msg in st.session_state["messages"]:
             bot_html = f'<div class="msg-row-bot"><div class="msg-body-bot" style="white-space: pre-wrap;">{text}</div></div>'
             st.markdown(bot_html, unsafe_allow_html=True)
 
-# ---------------------------------------------------------
-# 6. RENDER LOADING UI (If Pending)
-# ---------------------------------------------------------
+
 if "pending_target" in st.session_state:
     curr_mode = st.session_state["pending_mode"]
     loading_verbs = {"JUDGE": "Judging...", "REFINE": "Rizzing...", "GENERATE": "Cooking..."}
@@ -524,11 +537,6 @@ if "pending_target" in st.session_state:
     loading_html = f'''<div class="loading-container"><div class="loading-text"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="2" x2="12" y2="6"></line><line x1="12" y1="18" x2="12" y2="22"></line><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line><line x1="2" y1="12" x2="6" y2="12"></line><line x1="18" y1="12" x2="22" y2="12"></line><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"></line><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"></line></svg> {loading_text}</div></div>'''
     st.markdown(loading_html, unsafe_allow_html=True)
 
-# ---------------------------------------------------------
-# 7. BOTTOM ANCHOR SPACER & AUTO-SCROLL
-# ---------------------------------------------------------
-# This 130px spacer is mathematically guaranteed to push the last message entirely 
-# above the chat input box (which floats at the bottom)
 st.markdown('<div id="chat-end-anchor" style="height: 130px; width: 100%;"></div>', unsafe_allow_html=True)
 
 components.html("""
@@ -544,10 +552,6 @@ components.html("""
 </script>
 """, height=0)
 
-
-# ---------------------------------------------------------
-# 8. EXECUTE GENERATION (If Pending)
-# ---------------------------------------------------------
 if "pending_target" in st.session_state:
     target_to_process = st.session_state.pop("pending_target")
     curr_mode = st.session_state.pop("pending_mode")
@@ -566,11 +570,9 @@ if "pending_target" in st.session_state:
                 full_prompt = f"[GENERATE] {target_to_process}"
 
     try:
-        model, tokenizer = get_mlx_model(model_path, active_adapter)
-        reply = generate_chat_response(model, tokenizer, full_prompt, max_tokens, temperature)
+        model_bundle = get_model(model_path, active_adapter, gguf_path)
+        reply = generate_chat_response(model_bundle, full_prompt, max_tokens, temperature)
         st.session_state["messages"].append({"role": "assistant", "content": reply})
     except Exception as e:
         st.session_state["messages"].append({"role": "assistant", "content": f"Execution error: {str(e)}"})
-
-    # Trigger a rerun so the new response renders properly (and scrolls into view)
     st.rerun()
