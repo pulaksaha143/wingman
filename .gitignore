@@ -22,10 +22,9 @@ env/
 .DS_Store
 Thumbs.db
 
-*.safetensors
-*.bin
-*.pt
-*.pth
+# Model weights are intentionally committed for deployment
 
-scripts/temp/
+scripts/
 index.html
+models/
+guide.md

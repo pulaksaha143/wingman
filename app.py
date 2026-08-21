@@ -1,4 +1,3 @@
-import json
 import os
 import re
 import sys
@@ -8,12 +7,14 @@ import streamlit.components.v1 as components
 
 sys.path.insert(0, str(Path(__file__).parent.resolve()))
 
+# ─── STREAMLIT CONFIG ───────────────────────────────────────────────────
 st.set_page_config(
     page_title="Wingman",
     layout="centered",
     initial_sidebar_state="collapsed"
 )
 
+# ─── CUSTOM CSS ─────────────────────────────────────────────────────────
 CUSTOM_CSS = """
 <style>
     :root {
@@ -48,15 +49,6 @@ CUSTOM_CSS = """
         padding-bottom: 120px !important; 
     }
 
-    /* Hide the communication text input entirely */
-    div[data-testid="stTextInput"] {
-        display: none !important;
-        visibility: hidden !important;
-        height: 0 !important;
-        width: 0 !important;
-        position: absolute !important;
-    }
-
     /* Header styling */
     .brand-group {
         display: flex;
@@ -66,7 +58,7 @@ CUSTOM_CSS = """
     }
 
     .brand-name {
-        font-size: 22px;
+        font-size: 24px;
         font-weight: 700;
         color: var(--primary);
         margin: 0;
@@ -112,9 +104,9 @@ CUSTOM_CSS = """
     .msg-body-bot {
         background-color: #ffffff;
         color: var(--text-main);
-        padding: 12px 18px;
+        padding: 14px 18px;
         border-radius: 18px 18px 18px 4px;
-        max-width: 75%;
+        max-width: 80%;
         font-size: 15px;
         line-height: 1.5;
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
@@ -128,12 +120,12 @@ CUSTOM_CSS = """
         font-weight: 700;
         text-transform: uppercase;
         letter-spacing: 0.5px;
-        padding: 2px 6px;
-        border-radius: 4px;
-        margin-bottom: 6px;
+        padding: 3px 8px;
+        border-radius: 6px;
+        margin-bottom: 8px;
     }
-    .aura-score-pos { background: #eef4f6; color: var(--primary); }
-    .aura-score-neg { background: #FDE8E7; color: #B52A25; }
+    .aura-score-pos { background: #eef4f6; color: var(--primary); border: 1px solid #bce1e8; }
+    .aura-score-neg { background: #FDE8E7; color: #B52A25; border: 1px solid #f8c1be; }
 
     .verdict-text { font-weight: 700; color: var(--primary); margin-bottom: 6px; }
     .roast-text { color: var(--text-main); font-size: 15px; line-height: 1.6; }
@@ -144,7 +136,7 @@ CUSTOM_CSS = """
         font-size: 12px;
         text-transform: uppercase;
         letter-spacing: 0.5px;
-        margin-bottom: 6px;
+        margin-bottom: 8px;
     }
 
     .option-item {
@@ -155,6 +147,7 @@ CUSTOM_CSS = """
         border-left: 3px solid var(--primary);
         border-radius: 0 10px 10px 0;
         font-size: 14px;
+        line-height: 1.5;
     }
 
     .option-item strong {
@@ -173,149 +166,78 @@ CUSTOM_CSS = """
         padding: 8px 14px; background: #ffffff; border: 1px solid var(--border-light);
         border-radius: 18px 18px 18px 4px; box-shadow: 0 2px 8px rgba(0,0,0,0.02);
     }
-    .loading-text svg { animation: spin 2s linear infinite; }
 
     @keyframes pulse { 0% { opacity: 0.7; } 50% { opacity: 1; } 100% { opacity: 0.7; } }
-    @keyframes spin { 100% { transform: rotate(360deg); } }
     @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
 
-    /* Input container animation */
-    div[data-testid="stBottom"] > div,
+    /* Bottom container & Input Pill Styling */
+    div[data-testid="stBottom"],
+    div[data-testid="stBottom"] > div {
+        background-color: var(--bg-main) !important;
+        background: var(--bg-main) !important;
+    }
+
     div[data-testid="stChatInputContainer"] {
         background-color: transparent !important;
         background: transparent !important;
     }
 
-    div[data-testid="stBottom"] {
-        position: fixed !important;
-        top: 50% !important;
-        bottom: auto !important;
-        transform: translate(-50%, -50%) !important;
-        left: 50% !important;
-        width: 90% !important;
-        max-width: 760px !important;
-        transition: top 0.45s cubic-bezier(0.16, 1, 0.3, 1), transform 0.45s cubic-bezier(0.16, 1, 0.3, 1) !important;
-        z-index: 999 !important;
-        background-color: transparent !important;
-        background: transparent !important;
-    }
-
-    body.chat-active div[data-testid="stBottom"] {
-        top: calc(100% - 24px) !important;
-        transform: translate(-50%, -100%) !important;
-    }
-
-    /* FIXED Input Pill Styling */
     div[data-testid="stChatInput"] {
-        background-color: #ffffff !important;
+        border-radius: 28px !important;
         border: 2px solid var(--primary) !important;
-        border-radius: 34px !important;
-        padding: 4px 6px 4px 20px !important;
-        box-shadow: 0 6px 24px rgba(14, 95, 110, 0.08) !important;
-    }
-    
-    div[data-testid="stChatInput"]:focus-within {
-        box-shadow: 0 6px 24px rgba(14, 95, 110, 0.15) !important;
+        background-color: #ffffff !important;
+        box-shadow: 0 4px 16px rgba(14, 95, 110, 0.08) !important;
     }
 
     div[data-testid="stChatInput"] > div {
+        background-color: transparent !important;
         background: transparent !important;
-        border: none !important;
-        box-shadow: none !important;
-        padding: 0 !important;
-        align-items: center !important; 
     }
 
     div[data-testid="stChatInput"] textarea {
         background-color: transparent !important;
         color: var(--text-main) !important;
-        font-size: 15px !important;
-        caret-color: var(--primary) !important;
-        padding-top: 12px !important;
-        padding-bottom: 12px !important;
-        min-height: 24px !important;
-        line-height: 1.4 !important;
     }
 
-    div[data-testid="stChatInput"] textarea::placeholder { 
-        color: var(--text-muted) !important;
-        opacity: 1 !important;
-    }
-
-    /* Circular Send Button */
     div[data-testid="stChatInput"] button {
         background-color: var(--primary) !important;
-        border: none !important;
+        color: #ffffff !important;
         border-radius: 50% !important;
-        width: 38px !important;
-        height: 38px !important;
-        min-width: 38px !important;
-        min-height: 38px !important;
-        display: flex !important;
-        align-items: center !important;
-        justify-content: center !important;
-        transition: background-color 0.2s, transform 0.1s !important;
-        align-self: center !important;
-        margin: 0 !important;
-        padding: 0 !important;
-        position: relative !important;
-        z-index: 11 !important;
     }
 
     div[data-testid="stChatInput"] button:hover {
         background-color: var(--primary-hover) !important;
-    }
-
-    div[data-testid="stChatInput"] button:active {
-        transform: scale(0.94) !important;
-    }
-
-    div[data-testid="stChatInput"] button svg {
-        fill: none !important;
-        stroke: #ffffff !important;
-        stroke-width: 2.5 !important;
-        width: 16px !important;
-        height: 16px !important;
     }
 </style>
 """
 st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
 
 
+# ─── MODEL LOADING ──────────────────────────────────────────────────────
 @st.cache_resource
-def get_model(model_path: str, adapter_path: str | None, gguf_path: str):
-    try:
-        import mlx.core as mx
-        import mlx_lm
-        mx.set_default_device(mx.gpu)
-        USE_MLX = True
-    except ImportError:
-        USE_MLX = False
+def get_model(model_path: str, adapter_path: str | None):
+    import mlx.core as mx
+    import mlx_lm
 
-    if USE_MLX:
-        if adapter_path and os.path.exists(adapter_path):
-            model, tokenizer = mlx_lm.load(model_path, adapter_path=adapter_path)
-        else:
-            model, tokenizer = mlx_lm.load(model_path)
-        
-        try:
-            im_end_id = tokenizer.encode("<|im_end|>")[0]
-            if hasattr(tokenizer, "eos_token_ids"):
-                tokenizer.eos_token_ids.add(im_end_id)
-        except Exception:
-            pass
-        return {"type": "mlx", "model": model, "tokenizer": tokenizer}
+    try:
+        mx.set_default_device(mx.gpu)
+    except Exception:
+        pass
+
+    if adapter_path and os.path.exists(adapter_path):
+        model, tokenizer = mlx_lm.load(model_path, adapter_path=adapter_path)
     else:
-        from llama_cpp import Llama
-        if not os.path.exists(gguf_path):
-            raise FileNotFoundError(f"GGUF model not found at {gguf_path}.")
-        
-        llm = Llama(
-            model_path=gguf_path,
-            n_ctx=2048,
-            verbose=False
-        )
-        return {"type": "llama", "model": llm, "tokenizer": None}
+        model, tokenizer = mlx_lm.load(model_path)
+
+    try:
+        im_end_id = tokenizer.encode("<|im_end|>")[0]
+        if hasattr(tokenizer, "eos_token_ids"):
+            tokenizer.eos_token_ids.add(im_end_id)
+    except Exception:
+        pass
+
+    return {"type": "mlx", "model": model, "tokenizer": tokenizer}
+
 
 def clean_response(text: str) -> str:
     if "<|im_end|>" in text:
@@ -328,7 +250,7 @@ def clean_response(text: str) -> str:
         stripped = line.strip()
         if not stripped:
             continue
-        if stripped.startswith("!") or stripped.startswith("[") or "!" in stripped[:5]:
+        if stripped.startswith("!") or (stripped.startswith("[") and len(cleaned_lines) > 0):
             break
 
         stripped = re.sub(r"[^\x00-\x7F]+", "", stripped).strip()
@@ -337,51 +259,86 @@ def clean_response(text: str) -> str:
 
         cleaned_lines.append(stripped)
 
-        if stripped.startswith("Roast:") and ("Rating:" in "\n".join(cleaned_lines) or "Aura:" in "\n".join(cleaned_lines) or "Verdict:" in "\n".join(cleaned_lines)):
-            break
-        if (stripped.startswith("Option 2") or "Option 2 (" in stripped) and "Diagnosis:" in "\n".join(cleaned_lines):
-            break
-        if (stripped.startswith("Option 3") or "Option 3 (" in stripped) and "Option 1" in "\n".join(cleaned_lines):
-            break
+        # We let the model output naturally up to max_tokens or <|im_end|>
+        # The previous aggressive break conditions were causing truncation.
 
     return "\n".join(cleaned_lines).strip()
 
-def generate_chat_response(model_bundle, prompt_str: str, max_tokens: int, temp: float) -> str:
-    messages = [{"role": "user", "content": prompt_str.strip()}]
-    
-    if model_bundle["type"] == "mlx":
-        import mlx.core as mx
-        import mlx_lm
-        from mlx_lm.sample_utils import make_sampler
-        mx.set_default_device(mx.gpu)
-        
-        model = model_bundle["model"]
-        tokenizer = model_bundle["tokenizer"]
-        formatted_prompt = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
-        sampler = make_sampler(temp=temp)
 
-        raw_response = mlx_lm.generate(
-            model,
-            tokenizer,
-            prompt=formatted_prompt,
-            max_tokens=max_tokens,
-            sampler=sampler,
-            verbose=False
+def generate_chat_response(model_bundle, prompt_str: str, curr_mode: str, max_tokens: int, temp: float) -> str:
+    import mlx.core as mx
+    import mlx_lm
+    from mlx_lm.sample_utils import make_sampler
+
+    try:
+        mx.set_default_device(mx.gpu)
+    except Exception:
+        pass
+
+    if curr_mode == "JUDGE":
+        system_instruction = (
+            "You are Wingman, an elite AI dating assistant.\n"
+            "Evaluate the provided line honestly and output strictly in this format:\n"
+            "Rating: <score>/10\n"
+            "Verdict: <short witty title>\n"
+            "Roast: <If the line is bad/cliché, deliver a savage witty roast. If the line is good, give enthusiastic praise.>"
+        )
+    elif curr_mode == "REFINE":
+        system_instruction = (
+            "You are Wingman, an elite AI dating assistant.\n"
+            "Diagnose why the original line failed and provide two upgraded options strictly in this format:\n"
+            "Diagnosis: <short breakdown of why the original line failed>\n"
+            "Option 1 (Playful Tease): '<line>'\n"
+            "Option 2 (Direct / Bold): '<line>'"
         )
     else:
-        llm = model_bundle["model"]
-        response = llm.create_chat_completion(
-            messages=messages,
-            max_tokens=max_tokens,
-            temperature=temp,
-            stream=False
+        system_instruction = (
+            "You are Wingman, an elite AI dating assistant.\n"
+            "Generate three distinct and confident openers strictly in this format:\n"
+            "Option 1 (Playful Tease): '<line>'\n"
+            "Option 2 (Curiosity Hook): '<line>'\n"
+            "Option 3 (Direct / Bold): '<line>'"
         )
-        raw_response = response['choices'][0]['message']['content']
-        
+
+    messages = [
+        {"role": "system", "content": system_instruction},
+        {"role": "user", "content": prompt_str.strip()},
+    ]
+
+    model = model_bundle["model"]
+    tokenizer = model_bundle["tokenizer"]
+    formatted_prompt = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+    import time
+    # Seed the random number generator so MLX generates fresh text on every request
+    mx.random.seed(int(time.time() * 1000))
+    sampler = make_sampler(temp=temp)
+
+    raw_response = mlx_lm.generate(
+        model,
+        tokenizer,
+        prompt=formatted_prompt,
+        max_tokens=max_tokens,
+        sampler=sampler,
+        verbose=False,
+    )
+
     return clean_response(raw_response)
 
-model_path = "models/Qwen2.5-1.5B"
-gguf_path = "models/wingman.gguf"
+
+# ─── CONFIGURATION & INITIALIZATION ─────────────────────────────────────
+import os
+import streamlit as st
+
+local_model_path = "models/Qwen2.5-1.5B"
+if not os.path.exists(local_model_path):
+    # This ensures the model is physically downloaded into the models/ folder
+    # so it's readily available for future refinement/training.
+    from huggingface_hub import snapshot_download
+    print(f"Model not found at {local_model_path}. Downloading from Hugging Face...")
+    os.makedirs("models", exist_ok=True)
+    snapshot_download(repo_id="Qwen/Qwen2.5-1.5B", local_dir=local_model_path)
+
+model_path = local_model_path
 active_adapter = (
     "outputs/qwen2.5-1.5b-wingman-lora/adapters"
     if os.path.exists("outputs/qwen2.5-1.5b-wingman-lora/adapters")
@@ -390,39 +347,38 @@ active_adapter = (
 temperature = 0.7
 max_tokens = 256
 
-
 if "messages" not in st.session_state:
     st.session_state["messages"] = []
 
-nav_l, nav_r = st.columns([4, 1])
-with nav_l:
-    st.markdown('<div class="brand-group"><h1 class="brand-name">Wingman</h1><span class="version-badge">v2.0</span></div>', unsafe_allow_html=True)
-with nav_r:
+# ─── HEADER & NAV ───────────────────────────────────────────────────────
+col_brand, col_settings, col_new = st.columns([6, 1.5, 1.5])
+with col_brand:
+    st.markdown(
+        '<div class="brand-group"><h1 class="brand-name">Wingman</h1></div>',
+        unsafe_allow_html=True,
+    )
+with col_settings:
+    st.write("") # Vertical spacing to align with header
+    if st.button("Settings", use_container_width=True):
+        st.session_state["show_settings"] = not st.session_state.get("show_settings", False)
+        st.rerun()
+with col_new:
+    st.write("") # Vertical spacing to align with header
     if st.button("New Chat", use_container_width=True):
         st.session_state["messages"] = []
         st.rerun()
 
-# Class toggle for the center-to-bottom animation
-components.html(f"""
-<script>
-(function() {{
-    const hasMessages = {str(bool(st.session_state['messages'])).lower()};
-    if (hasMessages) {{
-        window.parent.document.body.classList.add('chat-active');
-    }} else {{
-        window.parent.document.body.classList.remove('chat-active');
-    }}
-}})();
-</script>
-""", height=0)
+if st.sidebar.button("🔄 Reload AI Model (Clear Cache)", use_container_width=True):
+    st.cache_resource.clear()
+    st.sidebar.success("Model cache cleared! Next prompt will load fresh weights from disk.")
 
+# ─── CHAT INPUT HANDLING ────────────────────────────────────────────────
 user_input = st.chat_input("Use /judge, /refine, or /gen followed by your text...")
 
 if user_input:
     input_text = user_input.strip()
     lower_input = input_text.lower()
-    
-    # Save user message to history instantly
+
     st.session_state["messages"].append({"role": "user", "content": input_text})
 
     curr_mode = None
@@ -442,59 +398,61 @@ if user_input:
         target_to_process = input_text[10:].strip()
 
     if target_to_process:
-        # Flag that we need to generate a response (handled after rendering UI)
         st.session_state["pending_target"] = target_to_process
         st.session_state["pending_mode"] = curr_mode
     else:
-        # Invalid format - instantly append guide and rerun
         guide_message = (
-            "**Oops! Please use a command to tell Wingman what to do.**\n\n"
-            "• `/judge [text]` — Rate a pickup line or message\n"
-            "• `/refine [text]` — Polish your draft\n"
-            "• `/gen [scenario]` — Generate openers or ideas"
+            "💀 **Bro forgot the manual.** You can't just throw raw words at me without a command and expect rizz.\n\n"
+            "Use a command so I know what to do with your message:\n\n"
+            "• `/judge [line]` — Get a rating, verdict & roast (or praise if you actually cooked)\n"
+            "• `/refine [draft]` — Let me fix your catastrophic draft into high-tier openers\n"
+            "• `/gen [bio / situation]` — Cook up fresh, targeted openers from scratch"
         )
         st.session_state["messages"].append({"role": "assistant", "content": guide_message})
         st.rerun()
 
-
+# ─── RENDER CHAT HISTORY ────────────────────────────────────────────────
 for msg in st.session_state["messages"]:
     if msg["role"] == "user":
-        st.markdown(f'<div class="msg-row-user"><div class="msg-bubble-user">{msg["content"]}</div></div>', unsafe_allow_html=True)
+        st.markdown(
+            f'<div class="msg-row-user"><div class="msg-bubble-user">{msg["content"]}</div></div>',
+            unsafe_allow_html=True,
+        )
     else:
         text = msg["content"]
 
-        if "Rating:" in text or "Aura:" in text or "Verdict:" in text:
-            score_val = "0/10"
-            score_label = "RATING"
+        text_lower = text.lower()
+        if "rating:" in text_lower:
+            score_val = "5.0/10"
             verdict_val = ""
             roast_val = text
 
             for line in text.split("\n"):
-                if line.startswith("Aura:"):
-                    score_val = line.replace("Aura:", "").strip()
-                    score_label = "AURA"
-                elif line.startswith("Rating:"):
-                    score_val = line.replace("Rating:", "").strip()
-                    score_label = "RATING"
-                elif line.startswith("Verdict:"):
-                    verdict_val = line.replace("Verdict:", "").strip()
-                elif line.startswith("Roast:"):
-                    roast_val = line.replace("Roast:", "").strip()
+                lower_line = line.lower()
+                if lower_line.startswith("rating:"):
+                    # Extract the rating by ignoring the first 7 chars (Rating:)
+                    score_val = line[7:].strip()
+                elif lower_line.startswith("verdict:"):
+                    verdict_val = line[8:].strip()
+                elif lower_line.startswith("roast:"):
+                    roast_val = line[6:].strip()
 
-            is_pos = False
-            if score_label == "AURA":
-                is_pos = "+" in score_val or ("-" not in score_val and score_val != "0")
-            else:
-                try:
-                    rating_num = float(score_val.split("/")[0])
-                    is_pos = rating_num >= 6.0
-                except:
-                    is_pos = False
-                
+            try:
+                rating_num = float(score_val.split("/")[0])
+                is_pos = rating_num >= 6.0
+            except Exception:
+                is_pos = True
+
             badge_class = "aura-score-pos" if is_pos else "aura-score-neg"
-            verdict_span = f'<span class="verdict-text" style="margin-left: 8px;">{verdict_val}</span>' if verdict_val else ''
-            
-            bot_html = f'<div class="msg-row-bot"><div class="msg-body-bot"><div><span class="aura-score-badge {badge_class}">{score_label}: {score_val}</span>{verdict_span}</div><div class="roast-text">{roast_val}</div></div></div>'
+            verdict_span = (
+                f'<span class="verdict-text" style="margin-left: 8px;">{verdict_val}</span>' if verdict_val else ""
+            )
+
+            bot_html = (
+                f'<div class="msg-row-bot"><div class="msg-body-bot">'
+                f'<div><span class="aura-score-badge {badge_class}">RATING: {score_val}</span>{verdict_span}</div>'
+                f'<div class="roast-text">{roast_val}</div></div></div>'
+            )
             st.markdown(bot_html, unsafe_allow_html=True)
 
         elif "Diagnosis:" in text or "Option 1" in text:
@@ -514,34 +472,37 @@ for msg in st.session_state["messages"]:
                     curr_opt_idx = len(options) - 1
                 elif curr_opt_idx != -1 and line.strip():
                     options[curr_opt_idx][1] += " " + line.strip()
-            
+
             if not diag_val and not options:
                 bot_html = f'<div class="msg-row-bot"><div class="msg-body-bot" style="white-space: pre-wrap;">{text}</div></div>'
             else:
-                diag_html = f'<div class="diagnosis-text">DIAGNOSIS: {diag_val}</div>' if diag_val else ''
+                diag_html = f'<div class="diagnosis-text">DIAGNOSIS: {diag_val}</div>' if diag_val else ""
                 opts_html = "".join([f'<div class="option-item"><strong>{t}</strong> {b}</div>' for t, b in options])
                 bot_html = f'<div class="msg-row-bot"><div class="msg-body-bot">{diag_html}{opts_html}</div></div>'
-            
+
             st.markdown(bot_html, unsafe_allow_html=True)
 
         else:
             bot_html = f'<div class="msg-row-bot"><div class="msg-body-bot" style="white-space: pre-wrap;">{text}</div></div>'
             st.markdown(bot_html, unsafe_allow_html=True)
 
-
+# ─── PENDING RESPONSE GENERATION ────────────────────────────────────────
 if "pending_target" in st.session_state:
     curr_mode = st.session_state["pending_mode"]
     loading_verbs = {"JUDGE": "Judging...", "REFINE": "Rizzing...", "GENERATE": "Cooking..."}
     loading_text = loading_verbs.get(curr_mode, "Thinking...")
 
-    loading_html = f'''<div class="loading-container"><div class="loading-text"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="2" x2="12" y2="6"></line><line x1="12" y1="18" x2="12" y2="22"></line><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line><line x1="2" y1="12" x2="6" y2="12"></line><line x1="18" y1="12" x2="22" y2="12"></line><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"></line><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"></line></svg> {loading_text}</div></div>'''
+    loading_html = (
+        f'<div class="loading-container"><div class="loading-text">'
+        f"⏳ {loading_text}</div></div>"
+    )
     st.markdown(loading_html, unsafe_allow_html=True)
 
-st.markdown('<div id="chat-end-anchor" style="height: 130px; width: 100%;"></div>', unsafe_allow_html=True)
+st.markdown('<div id="chat-end-anchor" style="height: 40px; width: 100%;"></div>', unsafe_allow_html=True)
 
-components.html("""
+components.html(
+    """
 <script>
-    // A slight delay guarantees the DOM is fully painted by Streamlit before scrolling
     setTimeout(() => {
         const doc = window.parent.document;
         const anchor = doc.getElementById('chat-end-anchor');
@@ -550,13 +511,19 @@ components.html("""
         }
     }, 100);
 </script>
-""", height=0)
+""",
+    height=0,
+)
 
 if "pending_target" in st.session_state:
     target_to_process = st.session_state.pop("pending_target")
     curr_mode = st.session_state.pop("pending_mode")
 
-    if target_to_process.startswith("[JUDGE]") or target_to_process.startswith("[REFINE]") or target_to_process.startswith("[GENERATE]"):
+    if (
+        target_to_process.startswith("[JUDGE]")
+        or target_to_process.startswith("[REFINE]")
+        or target_to_process.startswith("[GENERATE]")
+    ):
         full_prompt = target_to_process
     else:
         if curr_mode == "JUDGE":
@@ -564,14 +531,11 @@ if "pending_target" in st.session_state:
         elif curr_mode == "REFINE":
             full_prompt = f"[REFINE] Line: '{target_to_process}'"
         else:
-            if not target_to_process.lower().startswith("scenario:"):
-                full_prompt = f"[GENERATE] Scenario: {target_to_process}"
-            else:
-                full_prompt = f"[GENERATE] {target_to_process}"
+            full_prompt = f"[GENERATE] Scenario: {target_to_process}"
 
     try:
-        model_bundle = get_model(model_path, active_adapter, gguf_path)
-        reply = generate_chat_response(model_bundle, full_prompt, max_tokens, temperature)
+        model_bundle = get_model(model_path, active_adapter)
+        reply = generate_chat_response(model_bundle, full_prompt, curr_mode, max_tokens, temperature)
         st.session_state["messages"].append({"role": "assistant", "content": reply})
     except Exception as e:
         st.session_state["messages"].append({"role": "assistant", "content": f"Execution error: {str(e)}"})
