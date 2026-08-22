@@ -28,3 +28,8 @@ scripts/
 index.html
 models/
 guide.md
+
+# Raw data folders to ignore
+experiment/
+experiment_2/
+open/

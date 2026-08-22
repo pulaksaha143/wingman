@@ -1,5 +1,5 @@
-streamlit>=1.40.0
+--extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu
+gradio>=4.0.0
 llama-cpp-python>=0.3.1
 mlx-lm>=0.19.0; sys_platform == 'darwin' and platform_machine == 'arm64'
 mlx>=0.20.0; sys_platform == 'darwin' and platform_machine == 'arm64'
-huggingface_hub>=0.23.0
